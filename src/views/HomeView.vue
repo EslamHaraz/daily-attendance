@@ -82,7 +82,7 @@ import {
   updateDoc,
   deleteDoc,
   query,
-  where,
+  where
 } from "firebase/firestore";
 
 export default {
