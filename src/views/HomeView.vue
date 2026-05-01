@@ -63,14 +63,6 @@
   </div>
 </template>
 
-<script>
-/*
-  Home.vue كامل - ملاحظات:
-  - يتطلب ملف src/firebase/firebase.js الذي يصدّر "db" (getFirestore(app))
-  - يعتمد أن حقل التاريخ في الدوكيومنت مخزن كـ "DD-MM-YYYY" أو "DD/MM/YYYY" أو "DD/MM/YYYY" (البرنامج يتعامل مع الشرطتين أو السلاش)
-  - يتوقع أن كل doc في workDays يحتوي على الحقول:
-      Date (string), Day (string), theAudience (string), Dismissing (string|null), userId (number)
-*/
 
 <script>
 import { db } from "@/firebase/firebase";
@@ -82,7 +74,7 @@ import {
   updateDoc,
   deleteDoc,
   query,
-  where
+  where,
 } from "firebase/firestore";
 
 export default {
@@ -156,7 +148,6 @@ export default {
       }
     },
 
-    // ✅ تم تعديل اللوجيك هنا فقط
     async addStart() {
       try {
         const userIdStr = localStorage.getItem("userId");
@@ -167,14 +158,17 @@ export default {
         const userId = Number(userIdStr);
 
         const now = new Date();
-
-        // 👇 إصلاح التوقيت الصيفي
-        const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-
-        const day = local.toLocaleDateString("ar-EG", { weekday: "long" });
-        const dateParts = local.toLocaleDateString("en-GB").split("/");
-        const date = `${dateParts[0]}-${dateParts[1]}-${dateParts[2]}`;
-        const time = `${local.getHours()}.${String(local.getMinutes()).padStart(2, "0")}`;
+        
+        // استخدام التوقيت المحلي المباشر بدون طرح الـ Offset لضمان الدقة
+        const day = now.toLocaleDateString("ar-EG", { weekday: "long" });
+        
+        // تنسيق التاريخ ليكون DD-MM-YYYY بشكل ثابت
+        const d = String(now.getDate()).padStart(2, '0');
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const y = now.getFullYear();
+        const date = `${d}-${m}-${y}`;
+        
+        const time = `${now.getHours()}.${String(now.getMinutes()).padStart(2, "0")}`;
 
         const q = query(
           collection(db, "workDays"),
@@ -202,20 +196,14 @@ export default {
       }
     },
 
-    // ✅ وتم التعديل هنا فقط
     async addEnd(item) {
       try {
         if (item.Dismissing) return;
 
         const now = new Date();
-
-        // 👇 إصلاح التوقيت الصيفي
-        const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
-
-        const dismissStr = `${local.getHours()}.${String(local.getMinutes()).padStart(2, "0")}`;
+        const dismissStr = `${now.getHours()}.${String(now.getMinutes()).padStart(2, "0")}`;
 
         await updateDoc(doc(db, "workDays", item.id), { Dismissing: dismissStr });
-
         item.Dismissing = dismissStr;
       } catch (err) {
         console.error("addEnd error:", err);
@@ -238,7 +226,9 @@ export default {
         if (!confirm("متأكد؟ سيتم حذف كل السجلات نهائيًا")) return;
         const q = await getDocs(collection(db, "workDays"));
         const ops = [];
-        q.forEach((d) => ops.push(deleteDoc(doc(db, "workDays", d.id))));
+        q.forEach((d) => {
+          ops.push(deleteDoc(doc(db, "workDays", d.id)));
+        });
         await Promise.all(ops);
         this.workDays = [];
       } catch (err) {
@@ -257,9 +247,7 @@ export default {
       if (str === null || str === undefined) return null;
       const s = String(str).trim();
       if (s.length === 0) return null;
-
       const safe = s.replace(":", ".").replace(",", ".").trim();
-
       const parts = safe.split(".");
       const hh = Number(parts[0]) || 0;
       let mm = 0;
@@ -276,10 +264,7 @@ export default {
       if (start === null || end === null) return null;
 
       let diff = end - start;
-
-      if (diff === 0) diff = 12 * 60;
-      if (diff < 0) diff += 24 * 60;
-
+      if (diff < 0) diff += 24 * 60; // معالجة العمل عبر منتصف الليل
       return diff;
     },
 
