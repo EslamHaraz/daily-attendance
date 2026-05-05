@@ -30,7 +30,7 @@
             <td>{{ formatDisplayTime(item.theAudience) }}</td>
             <td>{{ item.Dismissing ? formatDisplayTime(item.Dismissing) : "—" }}</td>
 
-            <!-- حساب عدد الساعات live (عرض H:MM) -->
+            <!-- حساب عدد الساعات live -->
             <td>{{ formatMinutesAsHMM(calcMinutes(item.theAudience, item.Dismissing)) }}</td>
 
             <td>
@@ -43,6 +43,11 @@
               </button>
 
               <span v-if="item.Dismissing" class="text-success ms-2">✔️</span>
+
+              <!-- زر التعديل الجديد -->
+              <button class="btn btn-warning ms-2" @click="editTimes(item)">
+                تعديل
+              </button>
 
               <button class="btn btn-danger ms-2" @click="deleteItem(item)">حذف</button>
             </td>
@@ -62,7 +67,6 @@
     </div>
   </div>
 </template>
-
 
 <script>
 import { db } from "@/firebase/firebase";
@@ -158,11 +162,7 @@ export default {
         const userId = Number(userIdStr);
 
         const now = new Date();
-        
-        // استخدام التوقيت المحلي المباشر بدون طرح الـ Offset لضمان الدقة
         const day = now.toLocaleDateString("ar-EG", { weekday: "long" });
-        
-        // تنسيق التاريخ ليكون DD-MM-YYYY بشكل ثابت
         const d = String(now.getDate()).padStart(2, '0');
         const m = String(now.getMonth() + 1).padStart(2, '0');
         const y = now.getFullYear();
@@ -199,15 +199,40 @@ export default {
     async addEnd(item) {
       try {
         if (item.Dismissing) return;
-
         const now = new Date();
         const dismissStr = `${now.getHours()}.${String(now.getMinutes()).padStart(2, "0")}`;
-
         await updateDoc(doc(db, "workDays", item.id), { Dismissing: dismissStr });
         item.Dismissing = dismissStr;
       } catch (err) {
         console.error("addEnd error:", err);
         alert("حصل خطأ أثناء تسجيل الانصراف");
+      }
+    },
+
+    // دالة التعديل الجديدة
+    async editTimes(item) {
+      const newStart = prompt("تعديل وقت الحضور (مثال 08.30):", item.theAudience);
+      if (newStart === null) return;
+
+      const newEnd = prompt("تعديل وقت الانصراف (اتركه فارغاً إذا لم ينصرف):", item.Dismissing || "");
+      if (newEnd === null) return;
+
+      try {
+        const updatedData = {
+          theAudience: newStart.replace(":", "."),
+          Dismissing: newEnd.trim() !== "" ? newEnd.replace(":", ".") : null
+        };
+
+        await updateDoc(doc(db, "workDays", item.id), updatedData);
+        
+        // تحديث البيانات في المصفوفة الحالية
+        item.theAudience = updatedData.theAudience;
+        item.Dismissing = updatedData.Dismissing;
+        
+        alert("تم التعديل بنجاح ✅");
+      } catch (err) {
+        console.error("editTimes error:", err);
+        alert("حدث خطأ أثناء التعديل");
       }
     },
 
@@ -264,7 +289,7 @@ export default {
       if (start === null || end === null) return null;
 
       let diff = end - start;
-      if (diff < 0) diff += 24 * 60; // معالجة العمل عبر منتصف الليل
+      if (diff < 0) diff += 24 * 60; 
       return diff;
     },
 
@@ -290,6 +315,7 @@ export default {
   },
 };
 </script>
+
 <style scoped>
 .home {
   padding: 20px 0;
